@@ -1,0 +1,33 @@
+{
+  "name": "brand-audit",
+  "version": "0.1.0",
+  "private": true,
+  "description": "See if your website is on-brand. Paste a URL, get a Brand Score, see it fixed.",
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start -p 3000",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --import ./tests/register.mjs --test tests/*.test.ts",
+    "smoke": "node --experimental-strip-types --import ./tests/register.mjs scripts/smoke.ts"
+  },
+  "dependencies": {
+    "next": "15.5.25",
+    "react": "19.1.1",
+    "react-dom": "19.1.1",
+    "playwright-core": "1.56.0",
+    "pdf-parse": "1.1.1",
+    "pg": "8.13.1"
+  },
+  "devDependencies": {
+    "@types/node": "22.10.2",
+    "@types/pg": "8.11.10",
+    "@types/react": "19.1.1",
+    "@types/react-dom": "19.1.1",
+    "@tailwindcss/postcss": "4.1.13",
+    "tailwindcss": "4.1.13",
+    "typescript": "5.7.2"
+  },
+  "engines": { "node": ">=20.11" }
+}

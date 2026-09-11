@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Product — Northwind</title>
+<link rel="stylesheet" href="base.css">
+<style>
+  /* Slightly-off brand green, and a third button treatment. */
+  .btn-ghost { background: #00b84f; color: #fff; border-radius: 8px; font-weight: 600; padding: 14px 24px; display:inline-block; text-decoration:none; font-size:15px; }
+</style>
+</head>
+<body>
+<header class="site-header">
+  <nav class="nav">
+    <img class="logo" src="logo.svg" alt="Northwind" width="132" height="28">
+    <a href="index.html">Home</a>
+    <a href="product.html">Product</a>
+    <a href="pricing.html">Pricing</a>
+    <a href="about.html">About</a>
+    <a class="btn btn-primary" href="pricing.html">Get started</a>
+  </nav>
+</header>
+
+<main>
+  <section class="hero">
+    <h1>One API for every corridor</h1>
+    <p class="lede">Create a payout, track its status, and reconcile it — with the same three calls everywhere we operate.</p>
+    <a class="btn-ghost" href="contact.html">Read the docs</a>
+  </section>
+
+  <section class="features">
+    <h2>What you get</h2>
+    <div class="grid">
+      <article class="card">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="#0c0c0d"><rect x="3" y="3" width="18" height="18" rx="4"/></svg>
+        <h3>Idempotent payouts</h3>
+        <p>Retry safely. Every payout is keyed, so a repeated call never double-pays.</p>
+      </article>
+      <article class="card">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0c0c0d" stroke-width="1"><path d="M4 12h16"/></svg>
+        <h3>Webhooks that arrive</h3>
+        <p>Signed, retried with backoff, and replayable from the dashboard for 30 days.</p>
+      </article>
+      <article class="card">
+        <span class="emoji-icon">📊</span>
+        <h3>Reporting</h3>
+        <p>Export every movement as CSV, or query the same data through the reporting API.</p>
+      </article>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <p>© Northwind Payments. All rights reserved.</p>
+  <a href="about.html">About</a>
+  <a href="contact.html">Contact</a>
+</footer>
+</body>
+</html>
