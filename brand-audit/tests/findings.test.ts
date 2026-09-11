@@ -4,6 +4,7 @@ import { detectDeviations } from "@/lib/engine/deviations";
 import { buildFindings, summarizeFindings } from "@/lib/engine/findings";
 import { buildRemediationPlan } from "@/lib/engine/remediation";
 import { parseGuideDeterministically } from "@/lib/engine/brand-policy";
+import { googleFontUrl, resolveRenderableFont } from "@/lib/licensing";
 import { buildStyleProfile } from "@/lib/engine/style-profile";
 import type { BrandRule } from "@/lib/types";
 import { consistentSite, el } from "./fixtures";
@@ -78,7 +79,7 @@ test("a licensed typeface surfaces an open alternative instead of a blocked fix"
 
   const typography = findings.find((f) => f.category === "typography")!;
   assert.ok(typography.assetRequirement, "expected a licensing requirement");
-  assert.equal(typography.assetRequirement!.freeAlternative, "Libre Baskerville");
+  assert.equal(typography.assetRequirement!.freeAlternative, "Source Serif 4");
   assert.equal(typography.autoRemediable, false, "a licensed font can't be auto-applied");
 });
 
@@ -142,6 +143,27 @@ test("a brand-guide typeface that needs a licence surfaces the licensing path", 
   const violation = findings.find((f) => f.classification === "violation")!;
   assert.ok(violation.assetRequirement, "a licensed typeface should surface its licence status");
   assert.equal(violation.assetRequirement!.status, "commercial");
-  assert.equal(violation.assetRequirement!.freeAlternative, "Libre Baskerville");
+  assert.equal(violation.assetRequirement!.freeAlternative, "Source Serif 4");
   assert.equal(violation.autoRemediable, false, "we can't apply a font we have no licence for");
+});
+
+test("an unrenderable brand face becomes an approved approximation, not a silent swap", () => {
+  const freight = resolveRenderableFont("Freight Text Pro");
+  assert.equal(freight.substituted, true, "a licensed face can't be rendered as itself");
+  assert.equal(freight.classification, "serif", "the editorial character must survive");
+  assert.match(freight.stack, /Source Serif 4/);
+
+  const objektiv = resolveRenderableFont("Objektiv Mk1");
+  assert.equal(objektiv.classification, "sans", "UI type stays functional");
+  assert.match(objektiv.stack, /Archivo/);
+
+  // An unknown face still keeps its classification so the hierarchy survives.
+  assert.equal(resolveRenderableFont("Some Unknown Display Serif").classification, "serif");
+  assert.equal(resolveRenderableFont("Inter").substituted, false);
+});
+
+test("only fonts from our own table can reach the preview's stylesheet URL", () => {
+  assert.equal(googleFontUrl(['Archivo"); @import url(//evil.example/x.css']), null);
+  assert.equal(googleFontUrl([]), null);
+  assert.match(googleFontUrl(["Source Serif 4", "Archivo"])!, /^https:\/\/fonts\.googleapis\.com\/css2\?family=Source%20Serif%204/);
 });

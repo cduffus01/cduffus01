@@ -1,3 +1,6 @@
+import fs from "node:fs";
+import path from "node:path";
+import { resolveRenderableFont } from "@/lib/licensing";
 import type { CapturedPage, Deviation, PreviewChange } from "@/lib/types";
 
 /**
@@ -45,6 +48,10 @@ export interface RemediationPlan {
   changes: PreviewChange[];
   /** The deviations this plan actually fixes, for projected rescoring. */
   applied: Deviation[];
+  /** Self-contained @font-face rules for any substituted face. */
+  fontFaceCss: string;
+  /** Canonical face -> what the preview actually rendered, when they differ. */
+  fontSubstitutions: { canonical: string; rendered: string }[];
 }
 
 /** Human labels for the three headline changes shown on the before/after. */
@@ -64,18 +71,40 @@ export function buildRemediationPlan(deviations: Deviation[]): RemediationPlan {
   const rules: string[] = [];
   const changes: PreviewChange[] = [];
   const applied: Deviation[] = [];
+  const googleFamilies: string[] = [];
+  const substitutions = new Map<string, string>();
 
   // Only fix what we are confident about: a preview that changes something the
   // user disagrees with is worse than a preview that changes less.
-  const candidates = deviations.filter(
-    (d) => d.autoRemediable && d.fix && d.confidence >= 0.75,
-  );
+  //
+  // Explicit brand-guide violations clear a lower bar than inferred drift. For
+  // inferred fixes the confidence is in our reading of the dominant pattern —
+  // that's the thing that might be wrong. For a guide rule the target is stated
+  // in the document, and the confidence only reflects how cleanly we extracted
+  // it, so a correctly-extracted rule should be applied.
+  const candidates = deviations.filter((d) => {
+    if (!d.autoRemediable || !d.fix) return false;
+    const floor = d.classification === "violation" ? 0.6 : 0.75;
+    return d.confidence >= floor;
+  });
 
   for (const deviation of candidates) {
     const fix = deviation.fix!;
-    const declarations = Object.entries(fix.declarations).filter(
-      ([property, value]) => ALLOWED_PROPERTIES.has(property) && isSafeValue(value),
-    );
+    const declarations = Object.entries(fix.declarations)
+      .filter(([property, value]) => ALLOWED_PROPERTIES.has(property) && isSafeValue(value))
+      .map(([property, value]): [string, string] => {
+        if (property !== "font-family") return [property, value];
+        // A required face we can't render becomes its approved open
+        // approximation, so the preview still shows the intended contrast
+        // between editorial and functional type.
+        const canonical = value.replace(/["']/g, "").split(",")[0]!.trim();
+        const renderable = resolveRenderableFont(canonical);
+        if (renderable.googleFamily) googleFamilies.push(renderable.googleFamily);
+        if (renderable.substituted) {
+          substitutions.set(canonical, renderable.stack.split(",")[0]!.replace(/"/g, ""));
+        }
+        return [property, renderable.stack];
+      });
     if (declarations.length === 0) continue;
 
     // The sheet is site-wide, so selectors from every page are kept; ones that
@@ -102,7 +131,39 @@ export function buildRemediationPlan(deviations: Deviation[]): RemediationPlan {
     });
   }
 
-  return { css: rules.join("\n\n"), changes: dedupeChanges(changes), applied };
+  return {
+    css: rules.join("\n\n"),
+    changes: dedupeChanges(changes),
+    applied,
+    fontFaceCss: googleFamilies.length > 0 ? embeddedFontCss() : "",
+    fontSubstitutions: [...substitutions.entries()].map(([canonical, rendered]) => ({
+      canonical,
+      rendered,
+    })),
+  };
+}
+
+let cachedFontCss: string | null = null;
+
+/**
+ * The embedded substitute faces (see scripts/embed-fonts.ts).
+ *
+ * Read from disk rather than fetched, so a preview render never depends on the
+ * audited site's CSP or on network egress being open.
+ */
+function embeddedFontCss(): string {
+  if (cachedFontCss !== null) return cachedFontCss;
+  try {
+    cachedFontCss = fs.readFileSync(
+      path.join(process.cwd(), "assets", "fonts", "embedded.css"),
+      "utf8",
+    );
+  } catch {
+    // Without the asset the preview falls back to the generic stack in each
+    // family's declaration, which still preserves serif/sans classification.
+    cachedFontCss = "";
+  }
+  return cachedFontCss;
 }
 
 /** The UI highlights ~3 changes; collapse repeats of the same kind first. */

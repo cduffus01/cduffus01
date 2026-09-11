@@ -40,12 +40,22 @@ export async function extractPdfText(buffer: Buffer): Promise<string | null> {
 
 const ROLE_WORDS: { re: RegExp; role: string }[] = [
   { re: /\b(h1|headline|heading\s*1|display|title)\b/i, role: "h1" },
-  { re: /\b(h2|subhead(?:ing)?|heading\s*2)\b/i, role: "h2" },
+  { re: /\b(h2|subhead(?:ing)?|heading\s*2|secondary\s+headings?)\b/i, role: "h2" },
   { re: /\b(h3|heading\s*3)\b/i, role: "h3" },
   { re: /\b(body|paragraph|copy|running\s*text)\b/i, role: "body" },
   { re: /\b(button|cta|call\s*to\s*action)\b/i, role: "cta" },
   { re: /\b(quote|pull\s*quote)\b/i, role: "quote" },
 ];
+
+/**
+ * The sentence a declaration sits in.
+ *
+ * Role words must not leak across sentences: "Primary buttons use #00B74F.
+ * Body text uses #53565A." would otherwise label the neutral as a CTA colour.
+ */
+function currentSentence(before: string): string {
+  return before.split(/(?<=[.!?])\s+/).pop() ?? before;
+}
 
 /** Last occurrence of a pattern in a string, or null. */
 function lastMatch(haystack: string, pattern: RegExp): string | null {
@@ -95,19 +105,22 @@ export function parseGuideDeterministically(text: string, auditId: string): Bran
   const hexRe = /#[0-9a-f]{6}\b/gi;
   let match: RegExpExecArray | null;
   while ((match = hexRe.exec(text)) !== null) {
-    const before = text.slice(Math.max(0, match.index - 90), match.index);
-    // Nearest wins: a document titled "Brand Guidelines" would otherwise label
-    // every colour on its first page as the brand colour.
+    const before = currentSentence(text.slice(Math.max(0, match.index - 200), match.index));
+    // Nearest wins, and only within this sentence: a document titled "Brand
+    // Guidelines" would otherwise label every colour on its first page as the
+    // brand colour, and "Primary buttons use X. Body text uses Y." would label
+    // the neutral as a CTA colour.
     // "brand" is a qualifier, not a role: in "our primary brand colour" the
     // role is primary. Specific words win; a bare "brand colour" means primary.
-    const specific = lastMatch(before, /\b(primary|secondary|accent|cta|buttons?)\b/gi);
+    const specific = lastMatch(before, /\b(primary|secondary|accent|cta|call\s+to\s+action|buttons?)\b/gi);
     const role = specific ?? (/\bbrand\b/i.test(before) ? "primary" : null);
     if (!role) continue;
     const rgb = parseColor(match[0]);
     if (!rgb) continue;
-    const normalized = role.toLowerCase().replace(/s$/, "");
+    const normalized = role.toLowerCase().replace(/s$/, "").trim();
+    const asRole = /^(button|call to action)$/.test(normalized) ? "cta" : normalized;
     add(
-      { kind: "color", role: normalized === "button" ? "cta" : normalized, value: toHex(rgb) },
+      { kind: "color", role: asRole, value: toHex(rgb) },
       0.8,
       `${before}${match[0]}`,
     );
@@ -115,9 +128,9 @@ export function parseGuideDeterministically(text: string, auditId: string): Bran
   }
 
   // Typography: "Headings: Inter Bold" / "Body copy is set in Freight Text".
-  const fontRe = /\b([A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+){0,2})\s+(?:Bold|Medium|Regular|Light|Semibold|Black)\b/g;
+  const fontRe = /\b([A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z0-9]+){0,2})\s+(?:Bold|Medium|Regular|Light|Semibold|Black|Book|Italic)\b/g;
   while ((match = fontRe.exec(text)) !== null) {
-    const before = text.slice(Math.max(0, match.index - 110), match.index);
+    const before = currentSentence(text.slice(Math.max(0, match.index - 160), match.index));
     const role = nearestRole(before);
     if (!role || role === "cta" || role === "quote") continue;
     add({ kind: "font-family", role, value: match[1]!.trim() }, 0.7, `${before}${match[0]}`);
@@ -126,10 +139,12 @@ export function parseGuideDeterministically(text: string, auditId: string): Bran
 
   // Explicitly undefined areas. Recording these is the point: an area the guide
   // doesn't cover must never become an inferred requirement (spec section 6).
-  const undefinedRe = /\b([A-Za-z][A-Za-z ]{2,38}?)\s+(?:is|are)\s+not\s+(?:defined|specified|covered)\b/gi;
+  // The phrase must begin with a capitalised word (a sentence start), so a
+  // section heading above it is never swallowed into the area name.
+  const undefinedRe = /\b([A-Z][a-z]+(?:\s+[a-z]+){0,2})\s+(?:is|are)\s+not\s+(?:defined|specified|covered)\b/g;
   while ((match = undefinedRe.exec(text)) !== null) {
-    add({ kind: "undefined-area", area: match[1]!.trim().toLowerCase() }, 0.9,
-        text.slice(match.index, match.index + 120));
+    const area = match[1]!.trim().toLowerCase();
+    add({ kind: "undefined-area", area }, 0.9, text.slice(match.index, match.index + 120));
     if (rules.length > 70) break;
   }
 

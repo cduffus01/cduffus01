@@ -17,7 +17,10 @@ export const config = {
     totalBudgetMs: num(process.env.CRAWL_BUDGET_MS, 150_000),
     /** Politeness delay between page loads on the same host. */
     politenessMs: num(process.env.CRAWL_DELAY_MS, 400),
-    viewport: { width: 1440, height: 1000 },
+    viewport: {
+      width: num(process.env.VIEWPORT_WIDTH, 1440),
+      height: num(process.env.VIEWPORT_HEIGHT, 1000),
+    },
     userAgent:
       "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
       "(KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 BrandAudit/0.1 " +

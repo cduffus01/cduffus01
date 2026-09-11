@@ -82,9 +82,14 @@ export async function renderPreview(
   try {
     const loaded = await loadPage(context, target.url);
     try {
+      // Substituted faces are embedded, so they are available immediately and
+      // cannot be blocked by the audited site's CSP.
+      if (plan.fontFaceCss) {
+        await loaded.page.addStyleTag({ content: plan.fontFaceCss }).catch(() => undefined);
+      }
       await loaded.page.addStyleTag({ content: plan.css });
       // Let the browser reflow and swap any newly-requested web font.
-      await loaded.page.waitForTimeout(600);
+      await loaded.page.waitForTimeout(plan.fontFaceCss ? 1200 : 600);
       await loaded.page.evaluate(() => document.fonts?.ready).catch(() => undefined);
 
       const screenshots = await captureScreenshots(loaded.page, auditId, "preview-after");

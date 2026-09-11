@@ -32,10 +32,28 @@ function resolveExecutable(): string | undefined {
   return undefined; // fall back to Playwright's own resolution
 }
 
+/**
+ * Egress proxy, when the environment mandates one.
+ *
+ * Without this the browser can reach nothing outside localhost in a proxied
+ * network, which shows up as an audit that "works" but renders every page as an
+ * error, and as preview fonts that silently fail to load.
+ */
+function proxyConfig(): { server: string; bypass: string } | undefined {
+  // Opt-in: an ambient HTTPS_PROXY is often a CONNECT proxy that the browser
+  // cannot use the way a CLI does, so adopting it automatically would break
+  // crawling in environments where the browser has direct egress.
+  const server = process.env.BROWSER_PROXY;
+  if (!server) return undefined;
+  const bypass = process.env.NO_PROXY ?? process.env.no_proxy ?? "localhost,127.0.0.1,::1";
+  return { server, bypass };
+}
+
 export async function getBrowser(): Promise<Browser> {
   if (!browserPromise) {
     browserPromise = chromium.launch({
       executablePath: resolveExecutable(),
+      proxy: proxyConfig(),
       args: [
         "--no-sandbox",
         "--disable-dev-shm-usage",
