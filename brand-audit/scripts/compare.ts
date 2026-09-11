@@ -25,13 +25,28 @@ function pngSize(file: string): { width: number; height: number } {
 const dataUri = (file: string) =>
   `data:image/png;base64,${fs.readFileSync(file).toString("base64")}`;
 
+export interface ComposeOptions {
+  siteLabel: string;
+  notes?: string[];
+  beforeTitle?: string;
+  afterTitle?: string;
+}
+
 export async function compose(
   beforePath: string,
   afterPath: string,
   outPath: string,
-  siteLabel: string,
-  notes: string[] = [],
+  siteLabelOrOptions: string | ComposeOptions,
+  notesArg: string[] = [],
 ): Promise<void> {
+  const options: ComposeOptions =
+    typeof siteLabelOrOptions === "string"
+      ? { siteLabel: siteLabelOrOptions, notes: notesArg }
+      : siteLabelOrOptions;
+  const siteLabel = options.siteLabel;
+  const notes = options.notes ?? [];
+  const beforeTitle = options.beforeTitle ?? "Current website";
+  const afterTitle = options.afterTitle ?? "Brand-remediated";
   const before = pngSize(beforePath);
   const after = pngSize(afterPath);
   if (before.width !== after.width || before.height !== after.height) {
@@ -79,11 +94,11 @@ export async function compose(
   <div class="titles">
     <div class="before">
       <div class="eyebrow">Before</div>
-      <h2>Current website<span class="tag">AS-IS</span></h2>
+      <h2>${escapeHtml(beforeTitle)}<span class="tag">AS-IS</span></h2>
     </div>
     <div class="after">
       <div class="eyebrow">After</div>
-      <h2>Brand-remediated<span class="tag">AUTOMATED FIX</span></h2>
+      <h2>${escapeHtml(afterTitle)}<span class="tag">AUTOMATED FIX</span></h2>
     </div>
   </div>
   <div class="panels">
@@ -117,7 +132,7 @@ if (process.argv[1] && path.resolve(process.argv[1]).endsWith("compare.ts")) {
     console.error("usage: compare.ts <before.png> <after.png> <out.png> [label]");
     process.exit(1);
   }
-  compose(beforePath, afterPath, outPath, label ?? "")
+  compose(beforePath, afterPath, outPath, { siteLabel: label ?? "" })
     .then(() => console.log(`wrote ${outPath}`))
     .catch((err) => { console.error(err.message); process.exit(1); });
 }
